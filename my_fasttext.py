@@ -1,6 +1,5 @@
 ##
 
-
 print("start...")
 import tensorflow as tf
 from tensorflow.contrib.layers.python.layers import optimize_loss
@@ -131,6 +130,4 @@ def test(config=Config()):
 print("ended...")
 if __name__ == "__main__":
     my_config = Config()
-    from nltk.corpus import reuters
-    print(reuters.fileids())
-    # test(config=my_config)
+    test(config=my_config)
