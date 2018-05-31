@@ -36,13 +36,11 @@ class fastText:
             return
         self.loss_val = self.loss()
 
-        # backpropagation
+        # backpropagation：adding train option
         self.global_step = tf.Variable(0, trainable=False, name="Global_step")
         self.epoch_step = tf.Variable(0, trainable=False, name="Epoch_step")
         self.epoch_increment = tf.assign(self.epoch_step, tf.add(self.epoch_step, tf.constant(1)))
         self.decay_steps, self.decay_rate = self.config.decay_steps, self.config.decay_rate
-
-        # adding train option
         self.train_op = self.train()
 
         # computer prediction and accuracy
