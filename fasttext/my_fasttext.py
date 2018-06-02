@@ -65,7 +65,7 @@ class fastText:
 
         # 2. average vector, to get representation of the sentence
         self.sentence_embeddings = tf.reduce_mean(sentence_embeddings, axis=1, keepdims=True) # [None, 1, embed_size]
-        self.sentence_embeddings = tf.squeeze(self.sentence_embeddings, axis=1) # [None, embed_s]
+        self.sentence_embeddings = tf.squeeze(self.sentence_embeddings, axis=1) # [None, embed_size]
 
         # 3. linear classifier layer
         logits = tf.matmul(self.sentence_embeddings, self.W) + self.b # [None, labels_size]
