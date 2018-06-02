@@ -4,7 +4,6 @@ import tensorflow as tf
 import numpy as np
 from tensorflow.contrib.layers.python.layers import optimize_loss
 
-
 class TextCNN:
     def __init__(self, filter_sizes,num_filter,num_classes,label_size,vocab_size,embed_size,sequence_len,
                  learning_rate,batch_size,decay_steps,decay_rate,num_iter,is_training=True,multi_label_flag=False,
@@ -51,8 +50,7 @@ class TextCNN:
 
         # computer accuracy
 
-
-
+        
     def inference(self):
         # 1.get embedding of words in the sentence
         with tf.variable_scope('embedding-layer'):
