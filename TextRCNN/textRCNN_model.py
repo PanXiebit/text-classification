@@ -125,6 +125,7 @@ class RCNN:
             losses = tf.nn.softmax_cross_entropy_with_logits(logits=self.logits, labels=self.input_y_onehot)
         else:
             losses = tf.nn.softmax_cross_entropy_with_logits(logits=self.logits, labels=self.input_y_multilabels)
+        # 这里貌似对词向量也添加了l2正则化
         l2_loss = tf.add_n([tf.nn.l2_loss(v) for v in tf.trainable_variables() if 'bias' not in v.name]) * self.l2_lambda
         loss = tf.reduce_mean(losses) + l2_loss
         return loss
