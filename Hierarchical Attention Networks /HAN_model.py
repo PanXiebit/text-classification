@@ -3,7 +3,6 @@
 print('started...')
 
 import tensorflow as tf
-from attention_components import *
 from config import Config
 import tensorflow.contrib.layers as layers
 from tensorflow.contrib.layers.python.layers import optimize_loss
@@ -31,7 +30,7 @@ class HAN():
         self.global_step = tf.Variable(0, trainable=False, name='Global_step')
         self.epoch_step = tf.Variable(0, trainable=False, name='Epoch_step')
         self.epoch_increment = tf.assign(self.epoch_step, tf.add(self.epoch_step, tf.constant(1)))
-        self.decay_steps, self.decay_rate = self.decay_steps, self.decay_rate
+        self.decay_steps, self.decay_rate = self.config.decay_steps, self.config.decay_rate
         self.train_op = self.train()
 
         # accuracy
@@ -83,10 +82,10 @@ class HAN():
                 self.bh_sentence = tf.get_variable(name='bh-sentence', shape=[self.config.hidden_size*2], initializer=tf.constant_initializer(0.1))
 
             with tf.variable_scope('sentence-attention'):
-                self.Ws = tf.get_variable(name='Ws-attention-sentence', shape=[self.config.hidden_size*2, self.config.hidden_size*2], initializer=self.config.initializer)
-                self.bs = tf.get_variable(name='bs-attention-sentence', shape=[self.config.hidden_size*2], initializer=tf.constant_initializer(0.1))
+                self.Ws = tf.get_variable(name='Ws-attention-sentence', shape=[self.config.hidden_size*4, self.config.hidden_size*4], initializer=self.config.initializer)
+                self.bs = tf.get_variable(name='bs-attention-sentence', shape=[self.config.hidden_size*4], initializer=tf.constant_initializer(0.1))
                 # sentence level context vector can be randomly initialized and jointly learned during the training process.
-                self.us = tf.get_variable(name='informative-sentence', shape=[self.config.hidden_size*2], initializer=self.config.initializer)
+                self.us = tf.get_variable(name='informative-sentence', shape=[self.config.hidden_size*4], initializer=self.config.initializer)
 
         with tf.variable_scope("Projection"):
             self.W_projection = tf.get_variable(name='weight_projection', shape=[self.config.hidden_size*4, self.config.num_classes], initializer=self.config.initializer)
@@ -107,7 +106,7 @@ class HAN():
         embeded_words_squeeze = [tf.squeeze(x, axis=1) for x in embeded_words_splitted]  # a list, length is sentence_len, each element is [batch_size*num_sentences, embed_size]
 
         # 1.2 forward gru
-        hidden_state_forward_list = self.gru_word_level(embeded_words_squeeze)
+        hidden_state_forward_list = self.gru_word_level(embeded_words_squeeze) # return a list ,length is sentence_len, each element is [batch_size*num_sentences, hidden_size]
 
         # 1.3 backward gru
         embeded_words_squeeze.reverse()
@@ -115,22 +114,22 @@ class HAN():
         hidden_state_backward_list.reverse() # reverse twice
 
         # 1.4 concat forward hidden state and backward hidden state.
-        # hidden_state: a list.len:sentence_length,element:[batch_size*num_sentences,hidden_size*2]
         self.hidden_state_list = [tf.concat([h_forward, h_backward], axis=1) for h_forward, h_backward in
                              zip(hidden_state_forward_list,
-                                 hidden_state_backward_list)]# zip() 函数用于将可迭代的对象作为参数，将对象中对应的元素打包成一个个元组，然后返回由这些元组组成的列表。
-                                                             # 如果各个迭代器的元素个数不一致，则返回列表长度与最短的对象相同，利用 * 号操作符，可以将元组解压为列表。
+                                 hidden_state_backward_list)]# zip() 函数用于将可迭代的对象作为参数，将对象中对应的元素打包成一个个元组，然后返回由这些元组组成的列表。如果各个迭代器的元素个数不一致，则返回列表长度与最短的对象相同，利用 * 号操作符，可以将元组解压为列表。
+        # return hidden_state: a list.len:sentence_length,element:[batch_size*num_sentences,hidden_size*2]
+
 
         # 2. word Attention
-        sentence_representation = word_attention_level(self.config, self.hidden_state_list) # return: [batch_size*num_sentences, hidden_size*2]
+        sentence_representation = self.word_attention_level(self.hidden_state_list) # return: [batch_size*num_sentences, hidden_size*2]
 
         # 3. sentence encoder
-        sentence_representation = tf.reshape(sentence_representation, [self.config.batch_size, self.config.num_sentences, self.config.hidden_size]) # [batch_size, num_sentences, hidden_size]
+        sentence_representation = tf.reshape(sentence_representation, [self.config.batch_size, self.config.num_sentences, self.config.hidden_size*2]) # [batch_size, num_sentences, hidden_size*2]
 
         # 3.1 gru forward
-        sentence_representation_splitted = tf.split(sentence_representation, self.config.num_sentences, axis=1) # a list, each element is [self.config.batch_size,1,self.config.hidden_size]
-        sentence_representation_squeeze = [tf.squeeze(x) for x in sentence_representation_splitted] # a list, each element is [self.config.batch_size, self.config.hidden_size]
-        hidden_state_sentence_forward_list = self.gru_sentence_level(sentence_representation_squeeze)
+        sentence_representation_splitted = tf.split(sentence_representation, self.config.num_sentences, axis=1) # a list,length is num_sentences, each element is [self.config.batch_size,1,self.config.hidden_size*2]
+        sentence_representation_squeeze = [tf.squeeze(x) for x in sentence_representation_splitted] # a list, each element is [self.config.batch_size, self.config.hidden_size*2]
+        hidden_state_sentence_forward_list = self.gru_sentence_level(sentence_representation_squeeze) # a list, each element is [self.config.batch_size, self.config.hidden_size*2]
 
         # 3.2 gru backforward
         sentence_representation_squeeze.reverse()
@@ -140,9 +139,10 @@ class HAN():
         # 3.4 concat forward hidden state and backward hidden state.
         self.hidden_state_sentence_list = [tf.concat([h_forward, h_backward], axis=1) for h_forward, h_backward in
                                       zip(hidden_state_sentence_forward_list, hidden_state_sentence_backward_list)]
+        # a list, each element is [self.config.batch_size, self.config.hidden_size*4]
 
         # 4. sentence attention
-        document_representation = sentence_attention_level(self.config, self.hidden_state_sentence_list) # [batch_size, hidden_size*4]
+        document_representation = self.sentence_attention_level(self.hidden_state_sentence_list) # [batch_size, hidden_size*4]
 
         # 5. dropout
         with tf.name_scope('dropout'):
@@ -155,7 +155,7 @@ class HAN():
     def add_loss(self):
         if not self.config.multi_label_flag:
             print("Going to use single label loss.")
-            losses = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.input_y, logits=self.loss)
+            losses = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.input_y, logits=self.logits)
         else:
             print("Going to use multi label loss.")
             losses = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.input_y_multilabel, logits=self.logits)
@@ -207,6 +207,51 @@ class HAN():
             h_t_list.append(h_t)
         return h_t_list
 
+    def word_attention_level(self, hidden_state_list):
+        """
+        :param hidden_state_list: a list, sentence_len elements, and each element is [batch_size*num_sentences, hidden_size*2]
+        :return:
+        """
+        # tf.stack()
+        # Given a list of length `N` of tensors of shape `(A, B, C)`;
+        # if `axis == 0` then the `output` tensor will have the shape `(N, A, B, C)`.
+        # if `axis == 1` then the `output` tensor will have the shape `(A, N, B, C)`.
+        hidden_state_1 = tf.stack(hidden_state_list, axis=1)  # [batch_size*num_sentences, sentence_len, hidden_size*2]
+
+        # 为了方便所有的hidden_state与矩阵model.config.Ww相乘，将其shape转换为 [batch_size*num_sentences*sentence_len, hidden_size*2]
+        hidden_state_2 = tf.reshape(hidden_state_1,
+                                    [-1,
+                                     self.config.hidden_size * 2])  # [batch_size*num_sentences*sentence_len, hidden_size*2]
+
+        # 1) one-layer MLP: hidden_representation is the u_{it}
+        u_it = tf.nn.tanh(tf.matmul(hidden_state_2, self.Ww) + self.bw,
+                          name='hidden_representation')  # [batch_size*num_sentences*sentence_len, hidden_size*2]
+        u_it = tf.reshape(u_it, [-1, self.config.sentence_len,
+                                 self.config.hidden_size * 2])  # [batch_size*num_sentences, sentence_len, hidden_size*2]
+
+        # 2) get the importance of the word as the similarity of u_{it} with a word level context vector u_w
+
+        # model.config.uw是共享的，并且是需要训练的参数。与所有的 hidden state 矩阵相乘，求得相似度
+        # u_it.shape=[batch_size*num_sentences, sentence_len, hidden_size*2]  model.config.uw.shape=[model.config.hidden_size*2]
+        similarity_with_uit_uw = tf.reduce_sum(tf.multiply(u_it, self.uw), axis=2,
+                                               keepdims=False)  # axis=2 is a scale, [batch_size*num_sentence, sentence_len]
+        # subtract the maximum, avoid the Numerical overflow
+        similarity_with_uit_uw_max = tf.reduce_max(similarity_with_uit_uw, axis=1,
+                                                   keepdims=True)  # [batch_size*num_sentence, 1]
+
+        # get possibility distribution for each word in the sentence, a normalized importance weight α_it through a softmax function
+        alpha_it = tf.nn.softmax(similarity_with_uit_uw - similarity_with_uit_uw_max,
+                                 name='word_attention')  # [batch_size*num_sentence, sentence_len]
+
+        # 3) sentence vector s_i
+        alpha_it_expended = tf.expand_dims(alpha_it, axis=2)  # [batch_size*num_sentence, sentence_len, 1]
+        sentence_representation = tf.multiply(alpha_it_expended,
+                                              hidden_state_1)  # [batch_size*num_sentence, sentence_len, hidden_size*2]
+        # 将一个sentence中所有的经过attention加权了权重的word的向量表示累加，得到sentence的向量表示
+        sentence_representation = tf.reduce_sum(sentence_representation, axis=1,
+                                                keepdims=False)  # [batch_size*num_sentence, hidden_size*2]
+        return sentence_representation
+
     def gru_single_step_sentence_level(self, Xt, h_t_prev):
         """
         :param Xt: one sentence presentation of the document [batch_size, hidden_size*2]
@@ -225,8 +270,8 @@ class HAN():
 
     def gru_sentence_level(self, sentence_presentation_squeeze):
         """
-        :param sentence_presentation: # a list, each element is [self.config.batch_size, self.config.hidden_size]
-        :return:
+        :param sentence_presentation: # a list, each element is [self.config.batch_size, self.config.hidden_size*2]
+        :return: # a list, each element is [self.config.batch_size, self.config.hidden_size*2]
         """
         # the init sentence state
         h_t = tf.ones(shape=[self.config.batch_size, self.config.hidden_size*2])
@@ -235,6 +280,40 @@ class HAN():
             h_t = self.gru_single_step_sentence_level(hidden_state_sen, h_t)
             h_t_list.append(h_t)
         return h_t_list
+
+    def sentence_attention_level(self, hidden_state_sentence_list):
+        """
+        :param hidden_state_sentence_list: a list, length is num_sentence, each element is [bath_size, hidden_size*4]
+        :return:
+        """
+        hidden_state_sentence_1 = tf.stack(hidden_state_sentence_list,
+                                           axis=1)  # [bath_size, num_sentences, hidden_size*4]
+        # attention 是可以批量处理的，
+        hidden_state_sentence_2 = tf.reshape(hidden_state_sentence_1,
+                                             [-1,
+                                              self.config.hidden_size * 4])  # [bath_size*num_sentences, hidden_size*4]
+
+        # one MLP layer, hidden_sentence_representation is the u_{i}
+        u_i = tf.nn.tanh(tf.matmul(hidden_state_sentence_2, self.Ws) + self.bs,
+                         name='hidden_sentence_representation')  # [bath_size*num_sentences, hidden_size*4]
+        u_i = tf.reshape(u_i, [self.config.batch_size, self.config.num_sentences,
+                               self.config.hidden_size * 4])  # [bath_size, num_sentences, hidden_size*4]
+
+        # the similarity
+        similarity_ui_uw = tf.reduce_sum(tf.multiply(u_i, self.us), axis=2,
+                                         keepdims=False)  # [batch_size, num_sentences]
+        similarity_ui_uw_max = tf.reduce_max(similarity_ui_uw, axis=1, keepdims=True)  # [bath_size, 1]
+
+        alpha_i = tf.nn.softmax(similarity_ui_uw - similarity_ui_uw_max)  # [batch_size, num_sentences]
+        alpha_i_expanded = tf.expand_dims(alpha_i, axis=2)  # [batch_size, num_sentences]
+
+        # the document representation
+        document_representation = tf.multiply(alpha_i_expanded,
+                                              hidden_state_sentence_1)  # [bath_size, num_sentences, hidden_size*2]
+        # 将一个document中所有的经过attention加权了权重的sentence的向量表示累加，得到document的向量表示
+        document_representation = tf.reduce_sum(document_representation, axis=1,
+                                                keepdims=False)  # [bath_size, hidden_size*2]
+        return document_representation
 
 
     @staticmethod
@@ -252,7 +331,7 @@ class HAN():
 if __name__ == "__main__":
     config = Config()
     han = HAN(config)
-    input_x = tf.ones(shape=[config.batch_size, config.sequence_len])
+    input_x = np.ones([config.batch_size, config.sequence_len])
     input_y = np.array([1, 0, 1, 1, 1, 2, 1, 1])
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
