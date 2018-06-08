@@ -4,43 +4,23 @@ Simplified models for text classification by tensorflow.
 ### 1. fasttext
 tensorflow implementation of "[Bag of Tricks for Efficient Text Classification, Armand Joulin, Edouard Grave, Piotr Bojanowski, Tomas Mikolov](https://arxiv.org/pdf/1607.01759.pdf)"
 
-![](images/fasttext.png)
-
-#### loss function:
-
-$$\dfrac{1}{N}\sum_{n=1}^Ny_nlog(f(BAx_n))$$
-
-- N is the number of documents
-- $x_n$ is the normalized bag of features of the nth document. But in my_fasttext, I just use unigram.
-- $y_n$ is the label
-- A and B are the weight matrices.
-
-#### Negative sample
-When the number of classes is large, computing the linear classifier is computationally expensive. More precisely, the computational complexity is O(kh) where k is the number of classes and h the dimension of the text representation. In order to improve our running time, in our implementation we use negative sampling.
+详细见：[文本分类系列1-fasttext](http://www.panxiaoxie.cn/2018/05/23/%E6%96%87%E6%9C%AC%E5%88%86%E7%B1%BB%E7%B3%BB%E5%88%971-fasttext/)
 
 ### 2. TextCNN
 tensorflow implementation of "[Convolutional Neural Networks for Sentence Classification](http://www.aclweb.org/anthology/D14-1181)", and more information of configuration in "[A Sensitivity Analysis of (and Practitioners' Guide to) Convolutional Neural Networks for Sentence Classification](https://arxiv.org/abs/1510.03820)"
 
-![](images/textcnn01.png)
-
-embedding -> conv -> max-pooling -> fully connected layer -> softmax
-
-![](images/TextCNN.JPG)
+详细见：[文本分类系列2-textCNN](http://www.panxiaoxie.cn/2018/05/30/%E6%96%87%E6%9C%AC%E5%88%86%E7%B1%BB%E7%B3%BB%E5%88%972-textCNN/)
 
 ### 4. TextRCNN
 tensorflow implementation of "[Recurrent Convolutional Neural Networks for Text Classification](http://scholar.google.com/scholar?q=Recurrent+Convolutional+Neural+Networks+for+Text+Classification&hl=zh-CN&as_sdt=0&as_vis=1&oi=scholart)"
 
-![](images/rcnn.png)
+详细见：[文本分类系列4-textRCNN](http://www.panxiaoxie.cn/2018/06/01/%E6%96%87%E6%9C%AC%E5%88%86%E7%B1%BB%E7%B3%BB%E5%88%974-textRCNN/)
 
-The RecurrentNN is a biased model, where later words are more dominant than earlier words.  To tackle the bias problem, the Convolutional Neural Network (CNN), an unbiased model is introduced to NLP tasks,  which can fairly determine discriminative phrases in a text with a max-pooling layer.
 
-#### Implementation of Recurrent Structure
-The model is the enhanced version of rnn, it combines a word and its context to present a word. And then use an Convolutional layer (the filter_size is 1) to get the presentation of the word and its context.
+### 5. Hierarchical Attention Networks
+tensorflow implementation of [hierarchical attention networks for document classification](http://scholar.google.com/scholar?q=hierarchical+attention+networks+for+document+classification+github&hl=zh-CN&as_sdt=0&as_vis=1&oi=scholart)
 
-![](images/rcnn02.PNG)
-
-- Bidirectional RNN (Bi-RNN) is used to implement the left and right context vectors.
-- Each context vector is created by shifting the output of Bi-RNN and concatenating a zero state indicating the start of the context.
+详细见：[文本分类系列5-Hierarchical Attention Networks](http://www.panxiaoxie.cn/2018/06/03/%E6%96%87%E6%9C%AC%E5%88%86%E7%B1%BB%E7%B3%BB%E5%88%975-Hierarchical-Attention-Networks/#more)
 
 
 
