@@ -3,14 +3,36 @@
 print('started...')
 
 import tensorflow as tf
-from config import Config
 import tensorflow.contrib.layers as layers
 from tensorflow.contrib.layers.python.layers import optimize_loss
 import numpy as np
+from tensorflow.contrib.layers.python.layers import xavier_initializer
+
+class Config():
+    def __init__(self):
+        self.sequence_len = 30
+        self.num_sentences = 6
+        self.sentence_len = int(self.sequence_len / self.num_sentences)  # the number of words of each sencentenc
+        self.num_classes = 3
+        self.learning_rate = 0.01
+        self.batch_size = 8
+        self.decay_steps = 1000
+        self.decay_rate = 0.9
+        self.vocab_size = 10000
+        self.embed_size = 100
+        self.hidden_size = 100
+        self.is_training = True
+        # self.need_sentence_level_attention_encoder_flag = need_sentence_level_attention_encoder_flag
+        self.multi_label_flag = False
+        self.clip_gradients = 5.0
+        self.cell_type = 'gru'
+        self.dropout_keep_prob = 0.5
+        self.initializer = xavier_initializer()
+        self.l2_lambda = 0.5
   
 class HAN():
-    def __init__(self,config=Config()):
-        self.config = config
+    def __init__(self):
+        self.config = Config()
         # add placeholder
         self.input_x = tf.placeholder(dtype=tf.int32, shape=[None, self.config.sequence_len], name='input_x')
         self.input_y = tf.placeholder(dtype=tf.int32, shape=[None], name='input_y')
@@ -330,7 +352,7 @@ class HAN():
 
 if __name__ == "__main__":
     config = Config()
-    han = HAN(config)
+    han = HAN()
     input_x = np.ones([config.batch_size, config.sequence_len])
     input_y = np.array([1, 0, 1, 1, 1, 2, 1, 1])
     with tf.Session() as sess:
