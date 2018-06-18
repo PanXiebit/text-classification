@@ -56,12 +56,13 @@ class E2EMemm(object):
                  nonlin=None,
                  initializer=tf.random_normal_initializer(mean=0,stddev=0.1),
                  encoding=position_encoding,
+                 is_training = True,
                  name='MemN2N'):
         """Creats an end-to-end memory networks
 
         :param batch_size:
         :param sentence_len:
-        :param memory_size:
+        :param memory_size: the number of sentences in a single story.
         :param vocab_size: The size of the vocabulary (should include the nil word). The nil word
             one-hot encoding should be 0.
         :param embed_size: The max size of a sentence in the data. All sentences should be padded
@@ -85,37 +86,49 @@ class E2EMemm(object):
         self._nonlin = nonlin
         self._init = initializer
         self._name = name
+        self._is_training = is_training
 
         # 1. add placeholder
-        self._stories = tf.placeholder(tf.int32, [None, self._memroy_size, self._sentence_len], name="input_stories") # 这里的memory_size就是一个story中含有多少个sentence
-        self._queries = tf.placeholder(tf.int32, [None, self._sentence_len], name='query')
-        self._answer = tf.placeholder(tf.int32, [None, self._vocab_szie], name='answer') # 单个词，输出one-hot向量
-        self._lr = tf.placeholder(tf.float32, [], name="learning-rate")
+        with tf.name_scope("add_placeholder"):
+            self._stories = tf.placeholder(tf.int32, [None, self._memroy_size, self._sentence_len], name="input_stories") # 这里的memory_size就是一个story中含有多少个sentence
+            self._queries = tf.placeholder(tf.int32, [None, self._sentence_len], name='query')
+            self._answer = tf.placeholder(tf.int32, [None, self._vocab_szie], name='answer') # 单个词，输出one-hot向量
+            self._lr = tf.placeholder(tf.float32, [], name="learning-rate")
+            tf.summary.scalar('learning_rate', self._lr)
 
         # 2. init embedding matrix A,B,C
-        self._build_vars()
-        # accoding to the word order, get the weighted matrix [sentence_len, embed_size]
-        self._encoding = tf.constant(encoding(self._sentence_len, self._embed_szie), name='encoding') # 一个特殊的矩阵，根据词序计算得到的权重矩阵
+        with tf.name_scope("init_embedding_matrix"):
+            self._build_vars()
+            # accoding to the word order, get the weighted matrix [sentence_len, embed_size]
+            self._encoding = tf.constant(encoding(self._sentence_len, self._embed_szie), name='encoding') # 一个特殊的矩阵，根据词序计算得到的权重矩阵
+            tf.summary.histogram('position-encoding', self._encoding)
 
-        # 3. add loss
-        self._logits = self._inference() # [None, vocab_size]
-        cross_entropy = tf.nn.softmax_cross_entropy_with_logits(labels=self._answer, logits= self._logits, name='cross_entropy')
-        # 是否需要添加正则化??
-        self._loss = tf.reduce_sum(cross_entropy, name='cross-entropy-sum')
+        # 3. computer logits
+        with tf.name_scope('predicts'):
+            self._logits = self._inference()  # [None, vocab_size]
+            self.predict = tf.argmax(self._logits, axis=1, name='prediction')
 
-        # 4. train operation
-        self.global_step = tf.Variable(0, trainable=False, name='global_step')
-        self.epoch_step = tf.Variable(0, trainable=False, name='epoch_step')
-        epoch_step = tf.assign(self.epoch_step, tf.add(self.epoch_step, tf.constant(1)))
-        self.train_op = self._train()
+        # 4. accuracy
+        with tf.name_scope('accuracy'):
+            correct_prediction = tf.cast(tf.equal(self.predict, tf.argmax(self._answer, 1)), tf.int32)
+            self.accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32), name='Accuracy')
+            tf.summary.scalar('accuracy', self.accuracy)
+            if not self._is_training:
+                return
 
-        # 5. prediction
-        self.predict = tf.argmax(self._logits, axis=1, name='prediction')
+        # 5. add loss
+        with tf.name_scope('loss'):
+            cross_entropy = tf.nn.softmax_cross_entropy_with_logits(labels=self._answer, logits= self._logits, name='cross_entropy')
+            # 是否需要添加正则化??
+            self._loss = tf.reduce_sum(cross_entropy, name='loss')
+            tf.summary.scalar('loss', self._loss)
 
-        # 6. accuracy
-        correct_prediction = tf.cast(tf.equal(self.predict, tf.argmax(self._answer,1)), tf.int32)
-        self.accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32), name='Accuracy')
-
+        # 6. train operation
+        with tf.name_scope('train'):
+            self.global_step = tf.Variable(0, trainable=False, name='global_step')
+            self.epoch_step = tf.Variable(0, trainable=False, name='epoch_step')
+            epoch_step = tf.assign(self.epoch_step, tf.add(self.epoch_step, tf.constant(1)))
+            self.train_op = self._train()
 
     # padding if needed
     def _build_vars(self):
@@ -127,6 +140,7 @@ class E2EMemm(object):
             C = tf.concat(axis=0, values=[nil_word_slot, self._init([self._vocab_szie-1, self._embed_szie])], name='output-embedding-matrix')
 
             self.A_1 = tf.Variable(A, name='A') # A_1为初始设置，之后的A^{k+1}=C^k
+            tf.summary.histogram('embedding-matrix-A', self.A_1)
             self.C = []
 
             for hop in range(self._hops):
@@ -169,6 +183,7 @@ class E2EMemm(object):
             m_embed_C = tf.reduce_sum(m_embed_C * self._encoding, axis=2) # [None, memory_size, embed_size]
             m_embed_C_T= tf.transpose(m_embed_C, [0, 2, 1]) # [None, embed_size, memory_size]
 
+            # context vector
             output = tf.reduce_sum(m_embed_C_T * probs_temp, axis=2) # [None, embed_size]
 
             # u_{k+1} = o_k + u_k
@@ -198,30 +213,41 @@ class E2EMemm(object):
         train_op = self._opt.apply_gradients(nil_grads_abd_vars, name='train_op')
         return train_op
 
-    def batch_fit(self, stories, queries, answers, learning_rate, sess):
-        """Runs the training algorithm over the passed batch
-        Args:
-            stories: Tensor (None, memory_size, sentence_size)
-            queries: Tensor (None, sentence_size)
-            answers: Tensor (None, vocab_size)
-        Returns:
-            loss: floating-point number, the loss computed for the batch
-        """
-
-        feed_dict = {self._stories: stories, self._queries: queries, self._answer: answers, self._lr: learning_rate}
-        loss, _ = sess.run([self._loss, self.train_op], feed_dict=feed_dict)
-        return loss
+    # def predict(self, stories, queries):
+    #     """predicts answer as one-hot encoding.
+    #
+    #     :param stories: Tensor (None, memory_size, sentence_size)
+    #     :param queries: Tensor (None, sentence_size)
+    #     :return: answer: Tensor (None. vocab_size)
+    #     """
+    #     feed_dict = {self._stories: stories, self._queries:queries}
+    #     return self.
 
 
-# 一个小的test.
+
 if __name__ == '__main__':
+    # 一个小的test
     stories = np.random.randint(0, 100, size=(8, 10, 10))
     queries = np.random.randint(0,100,(8, 10))
     answer = tf.one_hot([1,4,5,2,7,5,4,55], depth=100)
     model = E2EMemm(batch_size=8, memory_size=10, sentence_len=10, vocab_size=100, embed_size=10)
+    merged = tf.summary.merge_all()
+
     with tf.Session() as sess:
+        train_writer = tf.summary.FileWriter('./tmp/summary/train', sess.graph)
         sess.run(tf.global_variables_initializer())
-        answer = answer.eval() # feed 不能为tensor
+
+        # # 查看以下哪些变量是可训练的，哪些是不可训练的
+        # print(tf.GraphKeys.GLOBAL_VARIABLES) # http://www.panxiaoxie.cn/2018/05/16/tensorflow-API-Building-Graphs/
+        # print(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES))
+        # print(tf.GraphKeys.TRAINABLE_VARIABLES)  # trainable_variables
+        # print(tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES))
+
+        answer = answer.eval() # feed 不能为 tensor
         for i in range(100):
-            loss = model.batch_fit(stories, queries, answer, learning_rate=0.01, sess=sess)
-            print("{} epoch, accuracy: {}".format(i, loss))
+            feed_dict = {model._stories: stories, model._queries:queries, model._answer:answer, model._lr:0.01}
+            summary,loss,  _ = sess.run([merged, model._loss, model.train_op], feed_dict)
+            if i%10 == 0:
+                print("{} epoch, loss:{}".format(i, loss))
+            train_writer.add_summary(summary, i) # Adds a `Summary` protocol buffer to the event file.
+        train_writer.close()

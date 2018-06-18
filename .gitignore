@@ -1,2 +1,5 @@
 data_zhihu_cup/
 *.pdf
+06-memory-networks/data
+*/__pycache__
+*/tmp
