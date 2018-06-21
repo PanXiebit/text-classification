@@ -133,7 +133,7 @@ class E2EMemm(object):
     # padding if needed
     def _build_vars(self):
         with tf.variable_scope(self._name):
-            nil_word_slot = tf.zeros([1, self._embed_szie])
+            nil_word_slot = tf.zeros([1, self._embed_szie])  # nil word
             # initilizate memory embedding matrix
             A = tf.concat(axis=0, values=[nil_word_slot, self._init([self._vocab_szie-1, self._embed_szie])], name='memory-embedding-matrix')
             # initilizate output embedding matrix
@@ -151,7 +151,7 @@ class E2EMemm(object):
     def _inference(self):
         # accoding to the Adjacent weight sharing, question embedding matrix B=A_1
         q_embed = tf.nn.embedding_lookup(self.A_1, self._queries) # [None, sentence_len, embed_size]
-        # 点乘根据词序得到的权重矩阵 u_0 = \sum_jl_j\cdot Bx_{ij}
+        #  internal state u:点乘根据词序得到的权重矩阵 u_0 = \sum_jl_j\cdot Bx_{ij}
         u_k = tf.reduce_sum(q_embed * self._encoding, axis=1) # [None, embed_size]
 
         for hop in range(self._hops):

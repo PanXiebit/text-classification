@@ -22,9 +22,16 @@ tensorflow implementation of [hierarchical attention networks for document class
 
 详细见：[文本分类系列5-Hierarchical Attention Networks](http://www.panxiaoxie.cn/2018/06/03/%E6%96%87%E6%9C%AC%E5%88%86%E7%B1%BB%E7%B3%BB%E5%88%975-Hierarchical-Attention-Networks/#more)
 
+### 6. End-to-End Memory Networks
+tensorflow implementation of [End-To-End Memory Networks](https://arxiv.org/abs/1503.08895)
 
+详细见：[QA1 memory networks 论文笔记](http://www.panxiaoxie.cn/2018/06/10/QA1-memory-networks-%E8%AE%BA%E6%96%87%E7%AC%94%E8%AE%B0/#more)
 
-
+And in the blog, there are more notes about  memory networks:
+- Memory Networks
+- End to End memory networks
+- Dynamic memory networks
+- DMN+
 
 
 ### reference
