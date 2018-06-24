@@ -192,9 +192,9 @@ class E2EMemm(object):
             if self._nonlin:
                 u_k = self._nonlin(u_k)
 
-        with tf.variable_scope('hop_{}'.format(self._hops)):
-            # W^T = C^k  [embed_size, vocab_size]
-            return tf.matmul(u_k, tf.transpose(self.C[-1]))  # [None, vocab_size]
+            with tf.variable_scope('hop_{}'.format(self._hops)):
+                # W^T = C^k  [embed_size, vocab_size]
+                return tf.matmul(u_k, tf.transpose(self.C[-1]))  # [None, vocab_size]
 
     def _train(self):
         # train_op = optimize_loss(self._loss, global_step=self.global_step,learning_rate=self._lr,

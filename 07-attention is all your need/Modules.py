@@ -19,7 +19,7 @@ def embedding_mine(vocab_size,
                    zero_pad,
                    scale,
                    reuse=None):
-    with tf.variable_scope("embedding-layer", reuse=reuse):
+    with tf.variable_scope("embedding", reuse=reuse):
         embedding = tf.get_variable("embedding", [vocab_size, num_units],
                                     initializer=xavier_initializer())
         if zero_pad:
@@ -83,7 +83,7 @@ def position_encoding_mine(n_position, d_model):
     encoding = np.zeros([n_position, d_model], np.float32)
     for pos in range(1, n_position):
         for i in range(0, d_model):
-            encoding[pos, i] = pos /np.power(10000, 2*i/d_model)
+            encoding[pos, i] = pos /np.power(10000, 2.*i/d_model)
 
     encoding[1:-2, 0::2] = np.sin(encoding[1:-2, 0::2]) # dim 2i
     encoding[1:-2, 1::2] = np.cos(encoding[1:-2, 1::2]) # dim 2i+1
@@ -133,7 +133,7 @@ def positional_encoding(inputs,
         if scale:
             outputs = outputs * num_units**0.5
 
-        return outputs, lookup_table
+        return outputs
 
 # position_encoding_mine 和 positional_encoding 中其实没啥区别，encoding 都是 [sentence_len, d_model],
 # 不过后者直接将 input 作为输入，并与encoding 结合得到 output
@@ -161,32 +161,107 @@ def Normalize(inputs,
     return outputs
 
 
+def position_wise_feed_forward(inputs,
+                               num_units1=2048,
+                               num_units2=512,
+                               reuse=None):
+    """ Point-wise feed forward net.
+
+    :param inputs: A 3D tensor with shape of [batch, length_q, d_model]
+    :param num_units1: A integers.
+    :param num_units2: A integers
+    :param reuse: Boolean, whether to reuse the weights of a previous layer
+        by the same name.
+    :return: A 3d tensor with the same shape and dtype as inputs
+    """
+    with tf.variable_scope("feed-forward-networks"):
+        # inner layers
+        params1 = {"inputs":inputs, "filters":num_units1, "kernel_size":1,
+                  "activation":tf.nn.relu, "use_bias":True, "strides":1}
+        outputs = tf.layers.conv1d(**params1)
+
+        # readout layer
+        params2 = {"inputs":outputs, "filters":num_units2, "kernel_size":1,
+                  "activation":None, "use_bias":True, "strides":1}
+        outputs = tf.layers.conv1d(**params2)
+
+        # residual connection
+        outputs += inputs
+
+        # Normalize
+        outputs = Normalize(outputs)
+
+    return outputs
 
 
+def position_wise_feed_forward_mine(inputs,
+                               num_units1=2048,
+                               num_units2=512,
+                               reuse=None):
+    with tf.variable_scope("feed-forward-networks"):
+        W1 = tf.get_variable("weight1", [inputs.get_shape()[-1], num_units1],initializer=xavier_initializer())
+        b1 = tf.get_variable('bias1', [num_units1], initializer=tf.constant_initializer(0.1))
+        outputs = tf.einsum('aij,jk->aik', inputs, W1) + b1  # [batch, length_q, num_units1]
+
+        W2 = tf.get_variable("weight1", [outputs.get_shape()[-1], num_units2], initializer=xavier_initializer())
+        b2 = tf.get_variable('bias1', [num_units2], initializer=tf.constant_initializer(0.1))
+        outputs = tf.einsum('aij,jk->aik', inputs, W2) + b2  # [batch, length_q, num_units1]
 
 
+        # residual connection
+        outputs += inputs
 
+        # Normalize
+        outputs = Normalize(outputs)
 
-def position_wise_feed_forward():
-    pass
+    return outputs
 
+def label_smoothing(inputs, epsilon=0.1):
+    """ Applies label smoothing. See https://arxiv.org/abs/1512.00567
 
+    :param inputs: A 3d tensor with shape of [N, T, V], where V is the number of vocabulary.
+    :param epsilon: Smoothing rate.
+        For example,
 
+    ```
+    import tensorflow as tf
+    inputs = tf.convert_to_tensor([[[0, 0, 1],
+       [0, 1, 0],
+       [1, 0, 0]],
+      [[1, 0, 0],
+       [1, 0, 0],
+       [0, 1, 0]]], tf.float32)
 
+    outputs = label_smoothing(inputs)
 
+    with tf.Session() as sess:
+        print(sess.run([outputs]))
+
+    >>
+    [array([[[ 0.03333334,  0.03333334,  0.93333334],
+        [ 0.03333334,  0.93333334,  0.03333334],
+        [ 0.93333334,  0.03333334,  0.03333334]],
+       [[ 0.93333334,  0.03333334,  0.03333334],
+        [ 0.93333334,  0.03333334,  0.03333334],
+        [ 0.03333334,  0.93333334,  0.03333334]]], dtype=float32)]
+    ```
+    """
+    K = inputs.get_shape().as_list()[-1]  # number of channels
+    return ((1-epsilon) * inputs) + (epsilon/K)
 
 
 if __name__ == "__main__":
-    tf.InteractiveSession()
-    n_pos = 10
-    d_model = 10
-    input = tf.random_normal([10, 10])
-    encoding1 = position_encoding_mine(n_pos, d_model)
-    output, encoding2 = positional_encoding(input, d_model)
-    print(encoding1 == encoding2.eval())  ## ??
-    print("----------")
-    print(encoding1)
-    print(encoding2.eval())
+    pass
+    # tf.InteractiveSession()
+    # n_pos = 10
+    # d_model = 10
+    # input = tf.random_normal([10, 10])
+    # encoding1 = position_encoding_mine(n_pos, d_model)
+    # output, encoding2 = positional_encoding(input, d_model)
+    # print(encoding1 == encoding2.eval())  ## ??
+    # print("----------")
+    # print(encoding1)
+    # print(encoding2.eval())
 
 
 

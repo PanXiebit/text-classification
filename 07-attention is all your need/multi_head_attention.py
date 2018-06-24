@@ -75,7 +75,7 @@ def multiheadattention(q,
         k_proj = tf.layers.dense(k, d_model) # [batch, lenght_kv, d_model]
         v_proj = tf.layers.dense(v, d_model) # [batch, lenght_kv, d_model]
 
-    with tf.variable_scope("multihead attention"):
+    with tf.variable_scope("multihead-attention"):
         # d_k = d_v = d_model/heads
         if d_model % heads != 0:
             raise ValueError("Key\values\query depth (%d) must be divisible by"
@@ -126,7 +126,7 @@ def multiheadattention(q,
         query_mask = tf.tile(tf.expand_dims(query_mask, axis=-1), [1, 1, tf.shape(k)[-1]]) # [batch*heads, length_q, length_kv]
 
         paddings = tf.ones_like(outputs) * (-2 ** 32 + 1)
-        outputs = tf.where(tf.equal(query_mask, 0), outputs, paddings, outputs) # [batch*heads, length_q, length_kv]
+        outputs = tf.where(tf.equal(query_mask, 0), paddings, outputs) # [batch*heads, length_q, length_kv]
 
         # Dropout
         if is_training:
