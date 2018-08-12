@@ -65,7 +65,7 @@ class E2EMemm(object):
         :param memory_size: the number of sentences in a single story.
         :param vocab_size: The size of the vocabulary (should include the nil word). The nil word
             one-hot encoding should be 0.
-        :param embed_size: The max size of a sentence in the data. All sentences should be padded
+        :param embed_size: The max size of a sentence in the glove_wv. All sentences should be padded
             to this length. If padding is required it should be done with nil one-hot encoding (0).
         :param hops: The number of hops. A hop consists of reading and addressing a memory slot.
             Defaults to `3`.

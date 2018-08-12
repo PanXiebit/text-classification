@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # prediction using model.
-# process --> 1. load data (X:list of int, y:int) 2. create Session 3. feed data 4. predict
+# process --> 1. load glove_wv (X:list of int, y:int) 2. create Session 3. feed glove_wv 4. predict
 
 from importlib import reload
 
@@ -34,9 +34,9 @@ tf.app.flags.DEFINE_integer("validate_every", 3, "Validate every validate very e
 tf.app.flags.DEFINE_string("predict_target_file", "fast_text_checkpoint/zhihu_result_fasttext.csv","target file path for final prediction")
 tf.app.flags.DEFINE_string("predict_source_file",'test-zhihu-forpredict-v4only-title.txt',"target file path for final prediction")
 
-# load data
+# load glove_wv
 def main():
-    # load data with vocabulary of words and labels
+    # load glove_wv with vocabulary of words and labels
     vocabulay_word2index, vocabulary_index2word = create_vocabulary()
     vocab_size = len(vocabulary_index2word)
 

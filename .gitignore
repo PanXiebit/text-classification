@@ -1,5 +1,10 @@
-data_zhihu_cup/
 *.pdf
-06-memory-networks/data
-*/__pycache__
-*/tmp
+__pycache__/
+dataset/
+glove_wv/
+paper/
+*.npy
+*.pickle
+images/
+.ipynb_checkpoints/
+temp/

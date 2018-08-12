@@ -3,7 +3,7 @@ Download tasks from facebook.ai/babi """
 # from __future__ import absolute_import
 # from __future__ import print_function
 
-from data_utils import load_task, vectorize_data
+from data_utils.tradition_data import load_task, vectorize_data
 from sklearn import cross_validation, metrics
 from memn2n_model import E2EMemm
 from itertools import chain
@@ -25,7 +25,7 @@ tf.flags.DEFINE_integer("embedding_size", 20, "Embedding size for embedding matr
 tf.flags.DEFINE_integer("memory_size", 50, "Maximum size of memory.")
 tf.flags.DEFINE_integer("task_id", 1, "bAbI task id, 1 <= id <= 20")
 tf.flags.DEFINE_integer("random_state", None, "Random state.")
-tf.flags.DEFINE_string("data_dir", "data/tasks_1-20_v1-2/en/", "Directory containing bAbI tasks")
+tf.flags.DEFINE_string("data_dir", "glove_wv/tasks_1-20_v1-2/en/", "Directory containing bAbI tasks")
 FLAGS = tf.flags.FLAGS
 
 
@@ -48,7 +48,7 @@ class Single_task():
     # get the word_to_index
     def vocab(self):
         # vocab = []
-        # for s,q,a in data:
+        # for s,q,a in glove_wv:
         #     vocab_ = (list(chain.from_iterable(s)) + q + a)
         #     vocab += vocab_
         # vocab = set(vocab)  ## 醉了醉了。。只有19个单词

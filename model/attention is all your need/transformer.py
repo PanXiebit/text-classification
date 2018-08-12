@@ -1,7 +1,6 @@
-# transformer for machine translation and question answering
+# model for machine translation and question answering
 
 import tensorflow as tf
-from data_utils import load_cn_vocab, load_en_vocab
 from Modules import *
 from multi_head_attention import *
 

@@ -12,7 +12,7 @@ def load_task(data_dir, task_id, only_supporting=False):
     :param data_dir:
     :param task_id:
     :param only_supporting:
-    :return: a tuple containing the training and testing data for the task.
+    :return: a tuple containing the training and testing glove_wv for the task.
     """
     assert task_id > 0 and task_id < 21
 
@@ -107,7 +107,7 @@ def vectorize_data(data, word_idx, sentence_size, memory_size):
     S = []
     Q = []
     A = []
-    for story, query, answer in data: # data's element is a tuple, (substory, query, answer)
+    for story, query, answer in data: # glove_wv's element is a tuple, (substory, query, answer)
         ss = []
         for i, sentence in enumerate(story, 1): # sentence is a list, for example: ['mary', 'moved', 'to', 'the', 'bathroom']
             ls = max(0, sentence_size - len(sentence))
@@ -142,7 +142,7 @@ def vectorize_data(data, word_idx, sentence_size, memory_size):
 
 
 if __name__ == "__main__":
-    data_dir = './data/tasks_1-20_v1-2/en'
+    data_dir = './glove_wv/tasks_1-20_v1-2/en'
     task_id = 1
     only_supporting = False
     # 每三句话一个(story, q, a)

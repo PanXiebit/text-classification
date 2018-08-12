@@ -1,91 +1,78 @@
-import os
-import argparse
-from data_utils import *
-from TextCNN.TextCNN_model import TextCNN
-from sklearn.model_selection import train_test_split
+from model.TextCNN import TextCNN
+from data_utils import batch_iter, build_tokens, build_word_dataset
 import tensorflow as tf
-
-parser = argparse.ArgumentParser()
-parser.add_argument("--model", type=str, default="TextCNN",
-                    help="Fasttext | TextRCNN")
-args = parser.parse_args()
-
-if not os.path.exists("dbpedia_csv"):
-    print("Downloading dbpedia dataset...")
-    download_dbpedia()
-
-# build training dataset
-print("build training dataset")
-WORD_MAX_LEN = 50
-word_dict = build_word_dict()
-x, y = build_word_dataset("train", word_dict, WORD_MAX_LEN)
-
-train_x, valid_x, train_y, valid_y = train_test_split(x, y, test_size=0.1)
-
-# hyperparameters
-NUM_CLASS = 14
-BATCH_SIZE = 64
-NUM_EPOCHS = 10
-VOCAB_SIZE = len(word_dict)
-LR = 1e-3
+from sklearn.cross_validation import train_test_split
 
 
+
+flags = tf.app.flags
+flags.DEFINE_integer("sentence_len", 30, "the max length a sentence in dataset")
+flags.DEFINE_integer("embed_size", 300, "the dimension of word vector")
+flags.DEFINE_integer("num_classes", 14, "the number of classes")
+flags.DEFINE_float("l2_lambda", 0.5, "the coefficient of l2 regularization")
+flags.DEFINE_float("learning_rate", 0.01, "the learning rate")
+flags.DEFINE_list("kernels_size", [3,4,5], "the sizes of kernels")
+flags.DEFINE_integer("filter_nums", 100, "the number of feature maps")
+flags.DEFINE_boolean("static", False, "whether the embedding is static or non-static")
+flags.DEFINE_float("keep_prob", 0.5, "the probability of dropout to keep")
+flags.DEFINE_integer("batch_size", 60, "the size of one batch")
+flags.DEFINE_integer("batch_size_val", 1000, "the size of one validation batch data")
+flags.DEFINE_integer("num_epochs", 10, "the number of epochs")
+FLAGS = flags.FLAGS
+
+
+# vocabulary
+tokens = build_tokens()  # len(tokens)=30003
+
+# 模型图
+# tf.reset_default_graph()
+model = TextCNN(tokens, FLAGS.sentence_len, FLAGS.embed_size, FLAGS.num_classes,
+                FLAGS.l2_lambda, FLAGS.learning_rate, FLAGS.kernels_size,
+                FLAGS.filter_nums, FLAGS.static, FLAGS.keep_prob)
+
+# 词典, 整理数据集
+X, y = build_word_dataset("train", tokens, FLAGS.sentence_len)            # [560000, 50]
+X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2)
+
+
+saver = tf.train.Saver()
+merged = tf.summary.merge_all()
 with tf.Session() as sess:
-    FILTER_SIZE = [5, 6, 7]
-    NUM_FILTER = 50
-    EMBED_SIZE = 128
-    model = TextCNN(filter_sizes=FILTER_SIZE, num_filter=NUM_FILTER, num_classes=NUM_CLASS, vocab_size=VOCAB_SIZE,
-                        embed_size=EMBED_SIZE, sequence_len=WORD_MAX_LEN, learning_rate=LR, batch_size=BATCH_SIZE,
-                        decay_steps=100, decay_rate=0.95, num_iter=NUM_EPOCHS, multi_label_flag=False,
-                        clip_gradients=5.0, dropout_keep_prob=0.5)
+
+    train_writer = tf.summary.FileWriter("./temp/v2/graph/train", graph=sess.graph)
+    val_writer = tf.summary.FileWriter("./temp/v2/graph/val")
 
     sess.run(tf.global_variables_initializer())
-    saver = tf.train.Saver(tf.global_variables())
 
-    train_batches = batch_iter(train_x, train_y, BATCH_SIZE, NUM_EPOCHS)
-    num_batches_per_epoch = (len(train_x)-1)//BATCH_SIZE + 1
-    max_accuracy = 0
-
-    for x_batch, y_batch in train_batches:
-        train_feed_dict = {
-            model.input_x:x_batch,
-            model.input_y:y_batch,
-            model.is_training:True
-        }
-
-        _, step, loss = sess.run([model.train_op, model.global_step, model.loss], feed_dict=train_feed_dict)
-
+    train_data = batch_iter(X_train, y_train, FLAGS.batch_size, FLAGS.num_epochs) # (448000/60)=7466
+    val_data = batch_iter(X_val, y_val, FLAGS.batch_size_val, FLAGS.num_epochs) # (112000/10000)*200=11.2*200=2240 # 迭代2240步就能计算一个val准确率
+    best_val_acc = 0
+    count = 0
+    for i, (train_batch_X, train_batch_y) in enumerate(train_data):
+        summary, _,step, loss, acc = sess.run([merged, model.train_op, model.global_step, model.loss, model.accuracy],
+                                      feed_dict={model.X:train_batch_X,
+                                                 model.y:train_batch_y,
+                                                 model.is_training:True})
         if step % 100 == 0:
-            print("step {0}: loss = {1}".format(step, loss))
+            print("step {}, loss is {}, acc is {}".format(step, loss, acc))
+            train_writer.add_summary(summary, step)
 
-        if step % 2000 == 0:
-            valid_batches = batch_iter(valid_x, valid_y, BATCH_SIZE, 1)
-            sum_accuracy, cnt = 0, 0
-            # Test accuracy with validation data for each epoch
-            for valid_x_batch, valid_y_batch in valid_batches:
-                valid_feed_dict = {
-                    model.input_x:valid_x_batch,
-                    model.input_y:valid_y_batch,
-                    model.is_training:False
-                }
+        if step % 200 == 0:
+            summary_val, val_loss, val_acc = sess.run([merged, model.loss, model.accuracy],
+                                         feed_dict={model.X:X_val,
+                                                    model.y:y_val,
+                                                    model.is_training:False})
+            print("step {}, val_loss is {},val_acc is {}\n".format(step, val_loss, val_acc))
+            val_writer.add_summary(summary_val, step)
+            saver.save(sess, "./temp/v2/model/", global_step=1000)
 
-                accuracy = sess.run(model.accuracy, feed_dict=valid_feed_dict)
-                sum_accuracy += accuracy
-                cnt += 1
+            # early stopping
+            if val_acc > best_val_acc:
+                best_val_acc = val_acc
+            else:
+                count += 1
+            if count > 5:
+                break
 
-            valid_accuracy = sum_accuracy / cnt
-            print("\nValidation Accuracy = {1}\n".format(step // num_batches_per_epoch, sum_accuracy / cnt))
-
-            # Save model
-            if valid_accuracy > max_accuracy:
-                max_accuracy = valid_accuracy
-                saver.save(sess, "{0}/{1}.ckpt".format(args.model, args.model), global_step=step)
-                print("Model is saved.\n")
-
-
-
-
-
-
-
-
+train_writer.close()
+val_writer.close()

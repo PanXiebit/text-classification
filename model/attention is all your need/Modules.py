@@ -1,4 +1,4 @@
-# the modules of transformer
+# the modules of model
 # position encoding
 
 
